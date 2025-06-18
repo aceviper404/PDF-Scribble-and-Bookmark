@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Annotator</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            width: 100%;
+            max-width: 1200px; /* Increased max-width to accommodate sidebar */
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .color-palette {
+            display: flex;
+            gap: 8px;
+            margin-left: 12px; /* Space from other controls */
+        }
+        .color-box {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.1s ease-in-out, border-color 0.1s ease-in-out;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .color-box:hover {
+            transform: scale(1.05);
+        }
+        .color-box.active {
+            border-color: #4f46e5; /* Indigo-600 border for active color */
+            transform: scale(1.08);
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);
+        }
+
+        /* New layout for PDF viewer and bookmarks panel */
+        .main-content-wrapper {
+            display: flex;
+            gap: 20px; /* Space between viewer and panel */
+            flex-grow: 1; /* Allow it to take available space */
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+            justify-content: center;
+        }
+
+        .pdf-viewer-area {
+            position: relative;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f7f7f7;
+            min-height: 600px; /* Minimum height for the viewer */
+            flex-grow: 1; /* Allow viewer to take up most space */
+            min-width: 400px; /* Ensure it's not too squished on larger screens */
+            max-width: calc(100% - 270px); /* Adjust based on sidebar width + gap */
+        }
+        .pdf-canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .annotation-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        .bookmark-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 1.5rem;
+            color: #f97316; /* Orange 500 */
+            display: none; /* Hidden by default */
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
+        }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            font-size: 1.2rem;
+            color: #4a5568;
+            border-radius: 8px;
+        }
+
+        /* Bookmarks Panel Styles */
+        .bookmarks-panel {
+            width: 250px; /* Fixed width for the sidebar */
+            background-color: #f8faff; /* Light blue background */
+            border-radius: 8px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.05); /* Subtle inner shadow */
+            padding: 16px;
+            overflow-y: auto; /* Scroll if too many bookmarks */
+            flex-shrink: 0; /* Prevent it from shrinking */
+            max-height: 70vh; /* Limit height if content is short */
+            border: 1px solid #e0e7ff; /* Light indigo border */
+            min-height: 200px; /* Minimum height for bookmarks panel */
+        }
+
+        .bookmarks-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #4f46e5; /* Indigo */
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e7ff;
+        }
+
+        .bookmarked-pages-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .bookmark-item {
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            background-color: #eef2ff; /* Very light indigo */
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: #312e81; /* Darker indigo */
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .bookmark-item:hover {
+            background-color: #e0e7ff; /* Lighter indigo on hover */
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .no-bookmarks-message {
+            color: #6b7280; /* Gray */
+            font-style: italic;
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        /* Custom Modal Styles (already present) */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0s, opacity 0.3s;
+        }
+        .modal-overlay.show {
+            visibility: visible;
+            opacity: 1;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-out;
+        }
+        .modal-overlay.show .modal-content {
+            transform: translateY(0);
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 25px;
+        }
+        .modal-button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+        .modal-button.primary {
+            background-color: #4f46e5; /* Indigo 600 */
+            color: white;
+        }
+        .modal-button.primary:hover {
+            background-color: #4338ca; /* Indigo 700 */
+            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);
+        }
+        .modal-button.secondary {
+            background-color: #e0e7ff; /* Indigo 100 */
+            color: #4f46e5; /* Indigo 600 */
+        }
+        .modal-button.secondary:hover {
+            background-color: #c7d2fe; /* Indigo 200 */
+            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.1);
+        }
+
+        /* Status Message (already present) */
+        .status-message {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            z-index: 1001;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .status-message.show {
+            opacity: 1;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .main-content-wrapper {
+                flex-direction: column; /* Stack viewer and panel vertically */
+            }
+            .pdf-viewer-area {
+                max-width: 100%; /* Take full width */
+            }
+            .bookmarks-panel {
+                width: 100%; /* Take full width */
+                max-height: 250px; /* Limit height when stacked */
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-4">PDF Annotator</h1>
+
+        <!-- File Input and Controls -->
+        <div class="controls">
+            <input type="file" id="pdfFile" accept=".pdf" class="block w-full md:w-auto text-sm text-gray-700
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-full file:border-0
+                file:text-sm file:font-semibold
+                file:bg-indigo-50 file:text-indigo-700
+                hover:file:bg-indigo-100
+                cursor:pointer" />
+
+            <button id="prevPage" class="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                Previous Page
+            </button>
+            <span id="pageInfo" class="text-lg font-medium text-gray-700">Page 1 / 1</span>
+            <button id="nextPage" class="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                Next Page
+            </button>
+            <input type="number" id="pageNumberInput" min="1" value="1" class="w-20 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+            <button id="jumpToPage" class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                Jump to Page
+            </button>
+            <button id="clearAnnotations" class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                Clear Scribbles
+            </button>
+            <button id="toggleBookmark" class="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors shadow-md">
+                Toggle Bookmark
+            </button>
+
+            <!-- Color Palette -->
+            <div class="color-palette">
+                <div class="color-box bg-purple-600 active" data-color="purple" title="Purple"></div>
+                <div class="color-box bg-blue-600" data-color="blue" title="Blue"></div>
+                <div class="color-box bg-red-600" data-color="red" title="Red"></div>
+                <div class="color-box bg-green-600" data-color="green" title="Green"></div>
+            </div>
+        </div>
+
+        <!-- Main content area and sidebar wrapper -->
+        <div class="main-content-wrapper">
+            <!-- PDF Viewer and Annotation Area -->
+            <div class="pdf-viewer-area relative">
+                <canvas id="pdfCanvas" class="pdf-canvas"></canvas>
+                <canvas id="annotationCanvas" class="annotation-canvas"></canvas>
+                <div id="loadingOverlay" class="loading-overlay hidden">Loading PDF...</div>
+                <span id="bookmarkIcon" class="bookmark-indicator hidden">🔖</span>
+            </div>
+
+            <!-- Bookmarks Panel -->
+            <div class="bookmarks-panel">
+                <h2 class="bookmarks-title">Bookmarked Pages</h2>
+                <ul id="bookmarkedPagesList" class="bookmarked-pages-list">
+                    <!-- Bookmarked pages will be inserted here -->
+                </ul>
+                <div id="noBookmarksMessage" class="no-bookmarks-message">No bookmarks yet.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Modal Structure -->
+    <div id="customModal" class="modal-overlay">
+        <div class="modal-content">
+            <p id="modalMessage" class="text-gray-800 text-lg font-medium mb-4"></p>
+            <div id="modalButtons" class="modal-buttons">
+                <!-- Buttons will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Message Display -->
+    <div id="statusMessage" class="status-message"></div>
+
+    <!-- PDF.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        // Set workerSrc for pdf.js to load the worker script
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        let pdfDoc = null; // Holds the PDF document object
+        let currentPageNum = 1; // Current page number being viewed
+        let pageRendering = false; // Flag to prevent multiple page renders
+        let pageNumPending = null; // Stores page number if a render is pending
+        let currentPdfUniqueKey = null; // Stores the unique key for the currently loaded PDF (hash-based)
+        let currentColor = 'purple'; // Default drawing color
+
+        // DOM elements
+        const pdfFile = document.getElementById('pdfFile');
+        const pdfCanvas = document.getElementById('pdfCanvas');
+        const annotationCanvas = document.getElementById('annotationCanvas');
+        const prevPageBtn = document.getElementById('prevPage');
+        const nextPageBtn = document.getElementById('nextPage');
+        const pageInfoSpan = document.getElementById('pageInfo');
+        const clearAnnotationsBtn = document.getElementById('clearAnnotations');
+        const toggleBookmarkBtn = document.getElementById('toggleBookmark');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const bookmarkIcon = document.getElementById('bookmarkIcon');
+        const customModal = document.getElementById('customModal');
+        const modalMessage = document.getElementById('modalMessage');
+        const modalButtons = document.getElementById('modalButtons');
+        const statusMessageDiv = document.getElementById('statusMessage');
+        const pageNumberInput = document.getElementById('pageNumberInput');
+        const jumpToPageBtn = document.getElementById('jumpToPage');
+        const colorPalette = document.querySelector('.color-palette');
+        const colorBoxes = document.querySelectorAll('.color-box');
+        const bookmarkedPagesList = document.getElementById('bookmarkedPagesList'); // New: UL for bookmarks
+        const noBookmarksMessage = document.getElementById('noBookmarksMessage'); // New: No bookmarks message
+
+
+        const pdfCtx = pdfCanvas.getContext('2d');
+        const annotationCtx = annotationCanvas.getContext('2d');
+
+        let isDrawing = false; // Flag for drawing state
+        let lastX = 0; // Last X coordinate for drawing
+        let lastY = 0; // Last Y coordinate for drawing
+
+        // Stores annotations per page.
+        // Format: { pageNum: [{ type: 'line', color: 'blue', points: [{x,y}, {x,y}, ...] }] }
+        const annotations = {};
+        // Stores bookmarked pages
+        // Format: { pageNum: true/false }
+        const bookmarks = {};
+
+        // --- Custom Modal Functions ---
+
+        /**
+         * Shows a custom alert modal.
+         * @param {string} message - The message to display.
+         */
+        function showCustomAlert(message) {
+            return new Promise(resolve => {
+                modalMessage.textContent = message;
+                modalButtons.innerHTML = `
+                    <button class="modal-button primary" id="modalOk">OK</button>
+                `;
+                customModal.classList.add('show');
+
+                document.getElementById('modalOk').onclick = () => {
+                    customModal.classList.remove('show');
+                    resolve();
+                };
+            });
+        }
+
+        /**
+         * Shows a custom confirmation modal.
+         * @param {string} message - The confirmation message.
+         * @returns {Promise<boolean>} - Resolves true if confirmed, false otherwise.
+         */
+        function showCustomConfirm(message) {
+            return new Promise(resolve => {
+                modalMessage.textContent = message;
+                modalButtons.innerHTML = `
+                    <button class="modal-button primary" id="modalYes">Yes</button>
+                    <button class="modal-button secondary" id="modalNo">No</button>
+                `;
+                customModal.classList.add('show');
+
+                document.getElementById('modalYes').onclick = () => {
+                    customModal.classList.remove('show');
+                    resolve(true);
+                };
+                document.getElementById('modalNo').onclick = () => {
+                    customModal.classList.remove('show');
+                    resolve(false);
+                };
+            });
+        }
+
+        // --- Status Message Functions ---
+        /**
+         * Displays a temporary status message.
+         * @param {string} message - The message to display.
+         * @param {number} duration - Duration in milliseconds for the message to show.
+         */
+        function showStatusMessage(message, duration = 3000) {
+            statusMessageDiv.textContent = message;
+            statusMessageDiv.classList.add('show');
+            setTimeout(() => {
+                statusMessageDiv.classList.remove('show');
+            }, duration);
+        }
+
+        // --- Persistence Functions (using localStorage) ---
+
+        /**
+         * Generates a storage key based on the PDF's content hash and filename.
+         * @param {string} hash - The SHA-256 hash of the PDF content.
+         * @param {string} fileName - The name of the PDF file.
+         * @returns {string} The unique storage key.
+         */
+        function getStorageKey(hash, fileName) {
+            // Using a combination of hash and filename for readability/debuggability
+            // The hash is the primary unique identifier.
+            return `pdf_annotator_data_${hash}_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        }
+
+        /**
+         * Saves current annotations and bookmarks to localStorage using the unique key.
+         */
+        function saveAnnotationsToStorage() {
+            if (!currentPdfUniqueKey) return;
+            try {
+                const dataToSave = {
+                    annotations: annotations,
+                    bookmarks: bookmarks
+                };
+                localStorage.setItem(currentPdfUniqueKey, JSON.stringify(dataToSave));
+                showStatusMessage('Scribbles & bookmarks saved!');
+            } catch (e) {
+                console.error("Error saving annotations to localStorage:", e);
+                showCustomAlert("Failed to save annotations. Browser storage might be full or blocked.");
+            }
+        }
+
+        /**
+         * Loads annotations and bookmarks from localStorage for the given unique key.
+         * @param {string} uniqueKey - The unique key for the PDF.
+         */
+        function loadAnnotationsFromStorage(uniqueKey) {
+            try {
+                const storedData = localStorage.getItem(uniqueKey);
+                if (storedData) {
+                    const parsedData = JSON.parse(storedData);
+                    // Clear existing data before loading new data
+                    Object.keys(annotations).forEach(key => delete annotations[key]);
+                    Object.keys(bookmarks).forEach(key => delete bookmarks[key]);
+
+                    // Copy loaded data
+                    Object.assign(annotations, parsedData.annotations || {});
+                    Object.assign(bookmarks, parsedData.bookmarks || {});
+                    showStatusMessage('Scribbles & bookmarks loaded!');
+                } else {
+                    showStatusMessage('No saved scribbles or bookmarks found for this PDF.');
+                }
+            } catch (e) {
+                console.error("Error loading annotations from localStorage:", e);
+                showCustomAlert("Failed to load saved annotations. Data might be corrupted.");
+            }
+        }
+
+        // --- PDF Content Hashing ---
+
+        /**
+         * Calculates the SHA-256 hash of an ArrayBuffer.
+         * @param {ArrayBuffer} buffer - The PDF file content as an ArrayBuffer.
+         * @returns {Promise<string>} - A promise that resolves with the SHA-256 hash as a hex string.
+         */
+        async function calculateSha256Hash(buffer) {
+            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hexHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return hexHash;
+        }
+
+        // --- PDF Rendering and Annotation Functions ---
+
+        /**
+         * Renders a specific page of the PDF.
+         * @param {number} num - The page number to render.
+         */
+        async function renderPage(num) {
+            // Check if a PDF document is loaded
+            if (!pdfDoc) {
+                console.warn("No PDF document loaded.");
+                return;
+            }
+
+            // If a page is already rendering, set pending page and return
+            if (pageRendering) {
+                pageNumPending = num;
+                return;
+            }
+
+            pageRendering = true; // Set rendering flag
+            currentPageNum = num; // Update current page number
+            pageInfoSpan.textContent = `Page ${num} / ${pdfDoc.numPages}`; // Update page info display
+            pageNumberInput.value = currentPageNum; // Update the input field as well
+
+            // Update button states
+            prevPageBtn.disabled = currentPageNum <= 1;
+            nextPageBtn.disabled = currentPageNum >= pdfDoc.numPages;
+            clearAnnotationsBtn.disabled = false; // Enable clear button once a PDF is loaded
+            jumpToPageBtn.disabled = false; // Enable jump button
+
+            // Show loading overlay
+            loadingOverlay.classList.remove('hidden');
+
+            try {
+                const page = await pdfDoc.getPage(num);
+
+                // Get device pixel ratio for high-DPI rendering
+                const dpr = window.devicePixelRatio || 1;
+
+                // Get the desired CSS width of the PDF viewer area
+                const desiredPdfCssWidth = document.querySelector('.pdf-viewer-area').clientWidth;
+
+                // Get the natural viewport at a base scale of 1
+                const originalViewport = page.getViewport({ scale: 1 });
+
+                // Calculate the scaling factor for PDF.js to render based on desired CSS width
+                // We multiply by a factor (e.g., 1.5 or 2.0) to ensure high-quality rendering
+                // that can be scaled down by the browser for crisp display.
+                const renderScaleFactor = (desiredPdfCssWidth / originalViewport.width) * 1.5; // Render at 1.5x CSS resolution
+
+                // Get the viewport using the calculated render scale factor
+                const pdfjsViewport = page.getViewport({ scale: renderScaleFactor });
+
+                // Set the *physical* dimensions (width/height attributes) of both canvases
+                // These are the actual pixels that PDF.js and our drawing will render onto.
+                pdfCanvas.width = pdfjsViewport.width * dpr;
+                pdfCanvas.height = pdfjsViewport.height * dpr;
+                annotationCanvas.width = pdfjsViewport.width * dpr;
+                annotationCanvas.height = pdfjsViewport.height * dpr;
+
+                // Set the *display* (CSS style width/height) dimensions of both canvases.
+                // This tells the browser how large to display the canvases on the screen.
+                pdfCanvas.style.width = `${pdfjsViewport.width}px`;
+                pdfCanvas.style.height = `${pdfjsViewport.height}px`;
+                annotationCanvas.style.width = `${pdfjsViewport.width}px`;
+                annotationCanvas.style.height = `${pdfjsViewport.height}px`;
+
+                // Clear and save context state, then apply global scale for high-DPI rendering.
+                // All subsequent drawing operations (PDF rendering and annotation drawing)
+                // will automatically adjust for the higher physical pixel density.
+                pdfCtx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+                pdfCtx.save();
+                pdfCtx.scale(dpr, dpr);
+
+                annotationCtx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+                annotationCtx.save();
+                annotationCtx.scale(dpr, dpr);
+
+                // Render PDF page
+                const renderContext = {
+                    canvasContext: pdfCtx,
+                    viewport: pdfjsViewport
+                };
+                await page.render(renderContext).promise;
+                pdfCtx.restore(); // Restore context to default (no scaling)
+
+                // Redraw existing annotations for the current page
+                drawExistingAnnotations(num);
+                annotationCtx.restore(); // Restore context to default (no scaling)
+
+
+                pageRendering = false; // Reset rendering flag
+
+                // Check if there's a pending page render
+                if (pageNumPending !== null) {
+                    renderPage(pageNumPending); // Render the pending page
+                    pageNumPending = null; // Clear pending page
+                }
+
+                updateBookmarkIcon(num); // Update bookmark icon based on current page
+            } catch (error) {
+                console.error('Error rendering page:', error);
+                showCustomAlert(`Error rendering page: ${error.message}`);
+            } finally {
+                loadingOverlay.classList.add('hidden'); // Hide loading overlay
+            }
+        }
+
+        /**
+         * Clears all annotations from the annotation canvas visually.
+         */
+        function clearAnnotationCanvas() {
+            // Need to clear the canvas at its physical dimensions, then reset context transform
+            annotationCtx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+        }
+
+        /**
+         * Draws previously saved annotations for the current page.
+         * @param {number} pageNum - The page number whose annotations to draw.
+         */
+        function drawExistingAnnotations(pageNum) {
+            clearAnnotationCanvas(); // Clear current canvas before drawing
+            const pageAnnotations = annotations[pageNum] || [];
+
+            // Context is already scaled by DPR in renderPage, so line properties
+            // and coordinates are relative to the logical CSS pixels.
+            annotationCtx.lineJoin = 'round';
+            annotationCtx.lineCap = 'round';
+            annotationCtx.lineWidth = 3; // Line width is now also relative to logical pixels
+
+            pageAnnotations.forEach(anno => {
+                if (anno.type === 'line' && anno.points.length > 1) {
+                    annotationCtx.strokeStyle = anno.color || 'blue'; // Use stored color, default to blue
+                    annotationCtx.beginPath();
+                    annotationCtx.moveTo(anno.points[0].x, anno.points[0].y);
+                    for (let i = 1; i < anno.points.length; i++) {
+                        annotationCtx.lineTo(anno.points[i].x, anno.points[i].y);
+                    }
+                    annotationCtx.stroke();
+                }
+            });
+        }
+
+        /**
+         * Queues a page render if it's not the current page.
+         * @param {number} num - The page number to show.
+         */
+        function queueRenderPage(num) {
+            if (pageRendering) {
+                pageNumPending = num;
+            } else {
+                renderPage(num);
+            }
+        }
+
+        /**
+         * Shows the previous page.
+         */
+        function onPrevPage() {
+            if (currentPageNum <= 1) {
+                return;
+            }
+            currentPageNum--;
+            queueRenderPage(currentPageNum);
+        }
+
+        /**
+         * Shows the next page.
+         */
+        function onNextPage() {
+            if (currentPageNum >= pdfDoc.numPages) {
+                return;
+            }
+            currentPageNum++;
+            queueRenderPage(currentPageNum);
+        }
+
+        /**
+         * Handles the "Jump to Page" action.
+         */
+        async function onJumpToPage() {
+            if (!pdfDoc) {
+                await showCustomAlert('Please load a PDF first.');
+                return;
+            }
+            const desiredPage = parseInt(pageNumberInput.value, 10);
+
+            if (isNaN(desiredPage) || desiredPage < 1 || desiredPage > pdfDoc.numPages) {
+                await showCustomAlert(`Please enter a valid page number between 1 and ${pdfDoc.numPages}.`);
+                pageNumberInput.value = currentPageNum; // Reset input to current page
+                return;
+            }
+
+            if (desiredPage !== currentPageNum) {
+                queueRenderPage(desiredPage);
+            }
+        }
+
+        /**
+         * Event handler for PDF file selection.
+         * @param {Event} event - The file input change event.
+         */
+        async function handlePdfFile(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            // Clear previous PDF state and annotations visually
+            pdfDoc = null;
+            currentPageNum = 1;
+            pageRendering = false;
+            pageNumPending = null;
+            clearAnnotationCanvas();
+            updateBookmarkIcon(currentPageNum); // Hide bookmark icon initially
+
+            loadingOverlay.classList.remove('hidden'); // Show loading overlay
+
+            const fileReader = new FileReader();
+            fileReader.onload = async () => {
+                const typedarray = new Uint8Array(fileReader.result);
+                try {
+                    // Calculate unique hash from PDF content
+                    const pdfContentHash = await calculateSha256Hash(typedarray);
+                    currentPdfUniqueKey = getStorageKey(pdfContentHash, file.name); // Set the unique key
+
+                    loadAnnotationsFromStorage(currentPdfUniqueKey); // Load saved data using the unique key
+                    updateBookmarksDisplay(); // Update the bookmark display after loading
+
+                    // Load PDF document
+                    pdfDoc = await pdfjsLib.getDocument({ data: typedarray }).promise;
+                    renderPage(currentPageNum); // Render the first page
+                    showStatusMessage(`PDF "${file.name}" loaded successfully.`);
+                    // Set max value for page number input
+                    pageNumberInput.max = pdfDoc.numPages;
+                    pageNumberInput.value = currentPageNum;
+                } catch (error) {
+                    console.error('Error loading PDF:', error);
+                    showCustomAlert('Error loading PDF or calculating hash. Please ensure it\'s a valid PDF file.');
+                    loadingOverlay.classList.add('hidden'); // Hide loading overlay on error
+                }
+                updateActiveColorButton(currentColor); // Ensure current color button is active on PDF load
+            };
+            fileReader.readAsArrayBuffer(file); // Read file as ArrayBuffer
+        }
+
+        /**
+         * Handles the start of drawing (mouse down or touch start).
+         * @param {MouseEvent|TouchEvent} e - The event object.
+         */
+        function startDrawing(e) {
+            if (!pdfDoc) return; // Don't draw if no PDF is loaded
+            isDrawing = true;
+            // Get mouse/touch coordinates relative to the canvas.
+            // These coordinates are in CSS pixels. Since the context is scaled by DPR,
+            // these values are directly usable.
+            const rect = annotationCanvas.getBoundingClientRect();
+            let clientX, clientY;
+            if (e.touches) { // Touch event
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else { // Mouse event
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            lastX = clientX - rect.left;
+            lastY = clientY - rect.top;
+
+            // Start new annotation line for current page, storing the current color
+            if (!annotations[currentPageNum]) {
+                annotations[currentPageNum] = [];
+            }
+            annotations[currentPageNum].push({ type: 'line', color: currentColor, points: [{ x: lastX, y: lastY }] });
+        }
+
+        /**
+         * Handles drawing (mouse move or touch move).
+         * @param {MouseEvent|TouchEvent} e - The event object.
+         */
+        function draw(e) {
+            if (!isDrawing) return;
+            // Prevent scrolling on touch devices while drawing
+            if (e.cancelable) e.preventDefault();
+
+            annotationCtx.strokeStyle = currentColor; // Use the currently selected color
+            annotationCtx.lineWidth = 3;
+            annotationCtx.lineJoin = 'round';
+            annotationCtx.lineCap = 'round';
+
+            annotationCtx.beginPath();
+            annotationCtx.moveTo(lastX, lastY);
+
+            const rect = annotationCanvas.getBoundingClientRect();
+            let clientX, clientY;
+            if (e.touches) { // Touch event
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else { // Mouse event
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            lastX = clientX - rect.left;
+            lastY = clientY - rect.top;
+
+            annotationCtx.lineTo(lastX, lastY);
+            annotationCtx.stroke();
+
+            // Add point to the current annotation line
+            const currentLine = annotations[currentPageNum][annotations[currentPageNum].length - 1];
+            currentLine.points.push({ x: lastX, y: lastY });
+        }
+
+        /**
+         * Handles the end of drawing (mouse up or touch end).
+         */
+        function stopDrawing() {
+            if (isDrawing) {
+                isDrawing = false;
+                saveAnnotationsToStorage(); // Save annotations after drawing
+            }
+        }
+
+        /**
+         * Clears all scribbles (annotations) for the current page.
+         */
+        async function clearCurrentPageAnnotations() {
+            const confirmed = await showCustomConfirm('Are you sure you want to clear all scribbles on this page? This cannot be undone.');
+            if (confirmed) {
+                delete annotations[currentPageNum]; // Remove annotations for current page from memory
+                clearAnnotationCanvas(); // Clear canvas visually
+                saveAnnotationsToStorage(); // Save the updated state to storage
+                showStatusMessage('Scribbles cleared for current page!');
+                // Re-enable clear button if needed (it's already enabled but good practice)
+                clearAnnotationsBtn.disabled = !pdfDoc;
+            }
+        }
+
+        /**
+         * Toggles the bookmark status for the current page.
+         */
+        function toggleCurrentPageBookmark() {
+            if (!pdfDoc) return; // No PDF loaded
+            bookmarks[currentPageNum] = !bookmarks[currentPageNum]; // Toggle boolean state
+            updateBookmarkIcon(currentPageNum); // Update UI
+            updateBookmarksDisplay(); // Update the bookmark display
+            saveAnnotationsToStorage(); // Save updated bookmark state
+            showStatusMessage(`Page ${currentPageNum} bookmark ${bookmarks[currentPageNum] ? 'added' : 'removed'}.`);
+        }
+
+        /**
+         * Updates the visibility of the bookmark icon based on the current page's bookmark status.
+         * @param {number} pageNum - The current page number.
+         */
+        function updateBookmarkIcon(pageNum) {
+            if (bookmarks[pageNum]) {
+                bookmarkIcon.classList.remove('hidden');
+            } else {
+                bookmarkIcon.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Handles window resize event to redraw PDF and annotations.
+         */
+        function handleResize() {
+            if (pdfDoc) {
+                queueRenderPage(currentPageNum); // Re-render the current page to adjust canvas size
+            }
+        }
+
+        /**
+         * Sets the active drawing color.
+         * @param {string} color - The color to set (e.g., 'blue', 'red', 'purple').
+         */
+        function setColor(color) {
+            currentColor = color;
+            updateActiveColorButton(color);
+            showStatusMessage(`Drawing color set to ${color}.`);
+        }
+
+        /**
+         * Updates the 'active' class on color buttons to highlight the selected color.
+         * @param {string} activeColor - The currently active color.
+         */
+        function updateActiveColorButton(activeColor) {
+            colorBoxes.forEach(box => {
+                if (box.dataset.color === activeColor) {
+                    box.classList.add('active');
+                } else {
+                    box.classList.remove('active');
+                }
+            });
+        }
+
+        /**
+         * Updates the list of bookmarked pages displayed in the sidebar.
+         */
+        function updateBookmarksDisplay() {
+            bookmarkedPagesList.innerHTML = ''; // Clear existing list
+            let hasBookmarks = false;
+            const sortedPageNumbers = Object.keys(bookmarks)
+                .filter(pageNum => bookmarks[pageNum]) // Only include bookmarked pages
+                .map(Number) // Convert keys to numbers
+                .sort((a, b) => a - b); // Sort numerically
+
+            if (sortedPageNumbers.length > 0) {
+                hasBookmarks = true;
+                sortedPageNumbers.forEach(pageNum => {
+                    const listItem = document.createElement('li');
+                    listItem.classList.add('bookmark-item');
+                    listItem.textContent = `Page ${pageNum}`;
+                    listItem.dataset.pageNum = pageNum; // Store page number for click handling
+                    listItem.addEventListener('click', () => {
+                        queueRenderPage(parseInt(listItem.dataset.pageNum, 10));
+                    });
+                    bookmarkedPagesList.appendChild(listItem);
+                });
+            }
+
+            // Show/hide "No bookmarks yet" message
+            if (hasBookmarks) {
+                noBookmarksMessage.classList.add('hidden');
+            } else {
+                noBookmarksMessage.classList.remove('hidden');
+            }
+        }
+
+
+        // Event Listeners
+        pdfFile.addEventListener('change', handlePdfFile);
+        prevPageBtn.addEventListener('click', onPrevPage);
+        nextPageBtn.addEventListener('click', onNextPage);
+        jumpToPageBtn.addEventListener('click', onJumpToPage);
+        clearAnnotationsBtn.addEventListener('click', clearCurrentPageAnnotations);
+        toggleBookmarkBtn.addEventListener('click', toggleCurrentPageBookmark);
+
+        // Drawing event listeners
+        annotationCanvas.addEventListener('mousedown', startDrawing);
+        annotationCanvas.addEventListener('mousemove', draw);
+        annotationCanvas.addEventListener('mouseup', stopDrawing);
+        annotationCanvas.addEventListener('mouseout', stopDrawing); // Stop drawing if mouse leaves canvas
+
+        // Touch event listeners for mobile devices
+        annotationCanvas.addEventListener('touchstart', startDrawing);
+        annotationCanvas.addEventListener('touchmove', draw, { passive: false }); // `passive: false` to allow preventDefault
+        annotationCanvas.addEventListener('touchend', stopDrawing);
+        annotationCanvas.addEventListener('touchcancel', stopDrawing);
+
+        // Window resize event listener for responsive canvas
+        window.addEventListener('resize', handleResize);
+
+        // Color selection event listeners
+        colorPalette.addEventListener('click', (event) => {
+            const clickedColorBox = event.target.closest('.color-box');
+            if (clickedColorBox) {
+                const selectedColor = clickedColorBox.dataset.color;
+                setColor(selectedColor);
+            }
+        });
+
+        // Initial state of buttons
+        prevPageBtn.disabled = true;
+        nextPageBtn.disabled = true;
+        clearAnnotationsBtn.disabled = true;
+        jumpToPageBtn.disabled = true;
+
+        // Set initial active color button
+        updateActiveColorButton(currentColor);
+        // Initial update of the bookmarks display
+        updateBookmarksDisplay();
+    </script>
+</body>
+</html>
