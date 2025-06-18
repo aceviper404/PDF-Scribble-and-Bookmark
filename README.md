@@ -1,4 +1,4 @@
-✨ Features
+#✨ Features
 PDF Loading: Easily upload and view PDF documents directly in your browser.
 
 Multi-Color Scribbling: Scribble notes on any page using a selection of colors: purple, blue, red, and green.
@@ -21,7 +21,7 @@ Responsive Design: The interface adjusts to fit different screen sizes, from des
 
 Custom Modals & Status Messages: User-friendly alerts and confirmations, along with subtle status notifications for actions.
 
-🚀 How to Use
+#🚀 How to Use
 Open the Application: Simply open the index.html file in any modern web browser.
 
 Load a PDF:
