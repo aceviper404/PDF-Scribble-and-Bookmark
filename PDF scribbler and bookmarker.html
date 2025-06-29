@@ -45,10 +45,20 @@
             gap: 12px;
             flex-wrap: wrap;
         }
+        .tool-selection {
+            display: flex;
+            gap: 8px; /* Adjusted gap for tool buttons */
+            margin-right: 12px; /* Space between tool selection and other controls */
+        }
+        .tool-selection .active-tool {
+            box-shadow: 0 0 0 3px #4f46e5; /* Highlight for active tool button */
+            border-radius: 8px; /* Apply to match other buttons */
+        }
         .color-palette {
             display: flex;
             gap: 8px;
             margin-left: 12px; /* Space from other controls */
+            transition: opacity 0.3s ease-in-out; /* Smooth transition for opacity */
         }
         .color-box {
             width: 32px;
@@ -81,10 +91,10 @@
             position: relative;
             border: 1px solid #e0e0e0;
             border-radius: 8px;
-            overflow: hidden;
+            overflow: auto; /* Changed to auto to allow vertical scrolling */
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start; /* Align to top for scrolling content */
             background-color: #f7f7f7;
             min-height: 600px; /* Minimum height for the viewer */
             flex-grow: 1; /* Allow viewer to take up most space */
@@ -94,15 +104,16 @@
         .pdf-canvas {
             display: block;
             width: 100%;
-            height: auto;
+            height: auto; /* Let height adjust based on aspect ratio */
         }
         .annotation-canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
-            cursor: crosshair;
+            height: auto; /* Match PDF canvas height */
+            cursor: crosshair; /* Default cursor for pen */
+            /* Eraser cursor will be set by JS */
         }
         .bookmark-indicator {
             position: absolute;
@@ -297,6 +308,16 @@
                 hover:file:bg-indigo-100
                 cursor:pointer" />
 
+            <!-- Tool Selection -->
+            <div class="tool-selection">
+                <button id="penTool" class="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors shadow-md">
+                    Pen
+                </button>
+                <button id="eraserTool" class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors shadow-md">
+                    Eraser
+                </button>
+            </div>
+
             <button id="prevPage" class="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
                 Previous Page
             </button>
@@ -370,6 +391,9 @@
         let pageNumPending = null; // Stores page number if a render is pending
         let currentPdfUniqueKey = null; // Stores the unique key for the currently loaded PDF (hash-based)
         let currentColor = 'purple'; // Default drawing color
+        let activeTool = 'pen'; // 'pen' or 'eraser' - New: active tool state
+        const ERASER_LINE_WIDTH = 20; // New: Thickness of the eraser stroke
+
 
         // DOM elements
         const pdfFile = document.getElementById('pdfFile');
@@ -390,8 +414,10 @@
         const jumpToPageBtn = document.getElementById('jumpToPage');
         const colorPalette = document.querySelector('.color-palette');
         const colorBoxes = document.querySelectorAll('.color-box');
-        const bookmarkedPagesList = document.getElementById('bookmarkedPagesList'); // New: UL for bookmarks
-        const noBookmarksMessage = document.getElementById('noBookmarksMessage'); // New: No bookmarks message
+        const bookmarkedPagesList = document.getElementById('bookmarkedPagesList');
+        const noBookmarksMessage = document.getElementById('noBookmarksMessage');
+        const penToolBtn = document.getElementById('penTool'); // New: Pen tool button
+        const eraserToolBtn = document.getElementById('eraserTool'); // New: Eraser tool button
 
 
         const pdfCtx = pdfCanvas.getContext('2d');
@@ -402,7 +428,7 @@
         let lastY = 0; // Last Y coordinate for drawing
 
         // Stores annotations per page.
-        // Format: { pageNum: [{ type: 'line', color: 'blue', points: [{x,y}, {x,y}, ...] }] }
+        // Format: { pageNum: [{ type: 'line', color: 'blue', points: [{x,y}, {x,y}, ...] }, { type: 'erase', lineWidth: 20, points: [...] }] }
         const annotations = {};
         // Stores bookmarked pages
         // Format: { pageNum: true/false }
@@ -579,21 +605,21 @@
                 // Get device pixel ratio for high-DPI rendering
                 const dpr = window.devicePixelRatio || 1;
 
-                // Get the desired CSS width of the PDF viewer area
-                const desiredPdfCssWidth = document.querySelector('.pdf-viewer-area').clientWidth;
+                // Get the actual current CSS width of the viewer area
+                const viewerArea = document.querySelector('.pdf-viewer-area');
+                const containerWidth = viewerArea.offsetWidth; // Get the computed width of the viewer area
 
-                // Get the natural viewport at a base scale of 1
+                // Get the natural viewport (at scale 1) to determine original PDF dimensions
                 const originalViewport = page.getViewport({ scale: 1 });
 
-                // Calculate the scaling factor for PDF.js to render based on desired CSS width
-                // We multiply by a factor (e.g., 1.5 or 2.0) to ensure high-quality rendering
-                // that can be scaled down by the browser for crisp display.
-                const renderScaleFactor = (desiredPdfCssWidth / originalViewport.width) * 1.5; // Render at 1.5x CSS resolution
+                // Calculate the scale needed to fit the page horizontally within the viewer area.
+                // This ensures the full width of the PDF is always visible.
+                const scale = containerWidth / originalViewport.width;
 
-                // Get the viewport using the calculated render scale factor
-                const pdfjsViewport = page.getViewport({ scale: renderScaleFactor });
+                // Use this calculated scale for PDF.js rendering.
+                const pdfjsViewport = page.getViewport({ scale: scale });
 
-                // Set the *physical* dimensions (width/height attributes) of both canvases
+                // Set the *physical* dimensions of both canvases (scaled by DPR for crispness)
                 // These are the actual pixels that PDF.js and our drawing will render onto.
                 pdfCanvas.width = pdfjsViewport.width * dpr;
                 pdfCanvas.height = pdfjsViewport.height * dpr;
@@ -602,14 +628,15 @@
 
                 // Set the *display* (CSS style width/height) dimensions of both canvases.
                 // This tells the browser how large to display the canvases on the screen.
-                pdfCanvas.style.width = `${pdfjsViewport.width}px`;
-                pdfCanvas.style.height = `${pdfjsViewport.height}px`;
-                annotationCanvas.style.width = `${pdfjsViewport.width}px`;
-                annotationCanvas.style.height = `${pdfjsViewport.height}px`;
+                // Set width to 100% (of its parent container) and height to 'auto' to maintain aspect ratio.
+                // This will allow vertical scrolling if the page height exceeds the viewer area's height.
+                pdfCanvas.style.width = '100%';
+                pdfCanvas.style.height = 'auto';
+                annotationCanvas.style.width = '100%';
+                annotationCanvas.style.height = 'auto';
 
-                // Clear and save context state, then apply global scale for high-DPI rendering.
-                // All subsequent drawing operations (PDF rendering and annotation drawing)
-                // will automatically adjust for the higher physical pixel density.
+                // Clear and apply global scale for high-DPI rendering to the contexts.
+                // This scaling needs to be applied BEFORE PDF.js renders, as it uses the context's current transform.
                 pdfCtx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
                 pdfCtx.save();
                 pdfCtx.scale(dpr, dpr);
@@ -618,7 +645,7 @@
                 annotationCtx.save();
                 annotationCtx.scale(dpr, dpr);
 
-                // Render PDF page
+                // Render PDF page using the pdfjsViewport
                 const renderContext = {
                     canvasContext: pdfCtx,
                     viewport: pdfjsViewport
@@ -626,7 +653,7 @@
                 await page.render(renderContext).promise;
                 pdfCtx.restore(); // Restore context to default (no scaling)
 
-                // Redraw existing annotations for the current page
+                // Redraw existing annotations
                 drawExistingAnnotations(num);
                 annotationCtx.restore(); // Restore context to default (no scaling)
 
@@ -664,15 +691,15 @@
             clearAnnotationCanvas(); // Clear current canvas before drawing
             const pageAnnotations = annotations[pageNum] || [];
 
-            // Context is already scaled by DPR in renderPage, so line properties
-            // and coordinates are relative to the logical CSS pixels.
             annotationCtx.lineJoin = 'round';
             annotationCtx.lineCap = 'round';
-            annotationCtx.lineWidth = 3; // Line width is now also relative to logical pixels
 
+            // First, draw all 'line' type annotations (non-erasing strokes)
+            annotationCtx.globalCompositeOperation = 'source-over'; // Default blend mode for drawing
             pageAnnotations.forEach(anno => {
                 if (anno.type === 'line' && anno.points.length > 1) {
-                    annotationCtx.strokeStyle = anno.color || 'blue'; // Use stored color, default to blue
+                    annotationCtx.strokeStyle = anno.color || 'blue'; // Use stored color
+                    annotationCtx.lineWidth = 3; // Standard line width for pen
                     annotationCtx.beginPath();
                     annotationCtx.moveTo(anno.points[0].x, anno.points[0].y);
                     for (let i = 1; i < anno.points.length; i++) {
@@ -681,6 +708,24 @@
                     annotationCtx.stroke();
                 }
             });
+
+            // Then, apply all 'erase' type annotations
+            annotationCtx.globalCompositeOperation = 'destination-out'; // Erase blend mode
+            pageAnnotations.forEach(anno => {
+                if (anno.type === 'erase' && anno.points.length > 1) {
+                    annotationCtx.strokeStyle = 'rgba(0,0,0,1)'; // Color doesn't matter for destination-out
+                    annotationCtx.lineWidth = anno.lineWidth || ERASER_LINE_WIDTH; // Use stored eraser width
+                    annotationCtx.beginPath();
+                    annotationCtx.moveTo(anno.points[0].x, anno.points[0].y);
+                    for (let i = 1; i < anno.points.length; i++) {
+                        annotationCtx.lineTo(anno.points[i].x, anno.points[i].y);
+                    }
+                    annotationCtx.stroke();
+                }
+            });
+
+            // Always reset composite operation for future interactive drawing
+            annotationCtx.globalCompositeOperation = 'source-over';
         }
 
         /**
@@ -781,6 +826,7 @@
                     showCustomAlert('Error loading PDF or calculating hash. Please ensure it\'s a valid PDF file.');
                     loadingOverlay.classList.add('hidden'); // Hide loading overlay on error
                 }
+                setActiveTool(activeTool); // Re-apply active tool visuals
                 updateActiveColorButton(currentColor); // Ensure current color button is active on PDF load
             };
             fileReader.readAsArrayBuffer(file); // Read file as ArrayBuffer
@@ -794,8 +840,7 @@
             if (!pdfDoc) return; // Don't draw if no PDF is loaded
             isDrawing = true;
             // Get mouse/touch coordinates relative to the canvas.
-            // These coordinates are in CSS pixels. Since the context is scaled by DPR,
-            // these values are directly usable.
+            // These coordinates are in CSS pixels.
             const rect = annotationCanvas.getBoundingClientRect();
             let clientX, clientY;
             if (e.touches) { // Touch event
@@ -808,11 +853,15 @@
             lastX = clientX - rect.left;
             lastY = clientY - rect.top;
 
-            // Start new annotation line for current page, storing the current color
+            // Start new annotation line for current page, storing based on active tool
             if (!annotations[currentPageNum]) {
                 annotations[currentPageNum] = [];
             }
-            annotations[currentPageNum].push({ type: 'line', color: currentColor, points: [{ x: lastX, y: lastY }] });
+            if (activeTool === 'pen') {
+                annotations[currentPageNum].push({ type: 'line', color: currentColor, points: [{ x: lastX, y: lastY }] });
+            } else if (activeTool === 'eraser') {
+                annotations[currentPageNum].push({ type: 'erase', lineWidth: ERASER_LINE_WIDTH, points: [{ x: lastX, y: lastY }] });
+            }
         }
 
         /**
@@ -823,11 +872,6 @@
             if (!isDrawing) return;
             // Prevent scrolling on touch devices while drawing
             if (e.cancelable) e.preventDefault();
-
-            annotationCtx.strokeStyle = currentColor; // Use the currently selected color
-            annotationCtx.lineWidth = 3;
-            annotationCtx.lineJoin = 'round';
-            annotationCtx.lineCap = 'round';
 
             annotationCtx.beginPath();
             annotationCtx.moveTo(lastX, lastY);
@@ -845,6 +889,20 @@
             lastY = clientY - rect.top;
 
             annotationCtx.lineTo(lastX, lastY);
+            annotationCtx.lineJoin = 'round';
+            annotationCtx.lineCap = 'round';
+
+            // Apply tool-specific styles and composite operation
+            if (activeTool === 'pen') {
+                annotationCtx.globalCompositeOperation = 'source-over'; // Default drawing mode
+                annotationCtx.strokeStyle = currentColor;
+                annotationCtx.lineWidth = 3;
+            } else if (activeTool === 'eraser') {
+                annotationCtx.globalCompositeOperation = 'destination-out'; // Erase mode
+                annotationCtx.strokeStyle = 'rgba(0,0,0,1)'; // Color doesn't matter for destination-out
+                annotationCtx.lineWidth = ERASER_LINE_WIDTH;
+            }
+
             annotationCtx.stroke();
 
             // Add point to the current annotation line
@@ -917,6 +975,10 @@
         function setColor(color) {
             currentColor = color;
             updateActiveColorButton(color);
+            // If pen tool is not active, activate it when a color is chosen.
+            if (activeTool !== 'pen') {
+                setActiveTool('pen');
+            }
             showStatusMessage(`Drawing color set to ${color}.`);
         }
 
@@ -932,6 +994,29 @@
                     box.classList.remove('active');
                 }
             });
+        }
+
+        /**
+         * Sets the current active tool (pen or eraser) and updates UI.
+         * @param {string} tool - 'pen' or 'eraser'.
+         */
+        function setActiveTool(tool) {
+            activeTool = tool;
+
+            // Update button highlights
+            penToolBtn.classList.remove('active-tool');
+            eraserToolBtn.classList.remove('active-tool');
+            if (tool === 'pen') {
+                penToolBtn.classList.add('active-tool');
+                colorPalette.classList.remove('opacity-50', 'pointer-events-none'); // Enable color palette
+                annotationCanvas.style.cursor = 'crosshair';
+            } else if (tool === 'eraser') {
+                eraserToolBtn.classList.add('active-tool');
+                colorPalette.classList.add('opacity-50', 'pointer-events-none'); // Disable color palette visually
+                // Inline SVG for eraser cursor. Hotspot 12 12 centers the 24x24 SVG.
+                annotationCanvas.style.cursor = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\' class=\'lucide lucide-eraser\'%3E%3Cpath d=\'M20.25 18.25L13.75 4.75L4 8L10.5 21.5L20.25 18.25Z\'/%3E%3Cpath d=\'M14 14L8.5 8.5\'/%3E%3Cpath d=\'M10.5 21.5L13.75 4.75L20.25 18.25L10.5 21.5Z\'/%3E%3C/svg%3E") 12 12, auto';
+            }
+            showStatusMessage(`Tool set to ${tool}.`);
         }
 
         /**
@@ -976,6 +1061,10 @@
         clearAnnotationsBtn.addEventListener('click', clearCurrentPageAnnotations);
         toggleBookmarkBtn.addEventListener('click', toggleCurrentPageBookmark);
 
+        // Tool selection listeners
+        penToolBtn.addEventListener('click', () => setActiveTool('pen'));
+        eraserToolBtn.addEventListener('click', () => setActiveTool('eraser'));
+
         // Drawing event listeners
         annotationCanvas.addEventListener('mousedown', startDrawing);
         annotationCanvas.addEventListener('mousemove', draw);
@@ -1006,7 +1095,8 @@
         clearAnnotationsBtn.disabled = true;
         jumpToPageBtn.disabled = true;
 
-        // Set initial active color button
+        // Set initial active tool and color
+        setActiveTool(activeTool); // This will also handle initial color palette state and cursor
         updateActiveColorButton(currentColor);
         // Initial update of the bookmarks display
         updateBookmarksDisplay();
