@@ -1,36 +1,3 @@
-# ✨ Features
-- PDF Loading: Easily upload and view PDF documents directly in your browser using multiple methods:
-
-  - Click "Choose File" button to select a PDF
-
-  - **Drag & Drop**: Simply drag any PDF file from your computer and drop it onto the viewer area
-
-- Multi-Color Scribbling: 
-
-  - **Pen Tool**: Draw annotations with multi-color support (purple, blue, red, and green)
-
-  - **Eraser Tool**: Selectively erase parts of your annotations with a larger brush size
-
-  - Easy tool switching with visual feedback and appropriate cursors
-
-- Page-Specific Annotations: All scribbles are saved uniquely for each PDF document and each page within that document.
-
-- Clear Scribbles: Option to clear all annotations from the currently viewed page.
-
-- Page Bookmarking: Toggle bookmarks on individual pages for quick reference.
-
-- Bookmarked Pages Display: A dedicated sidebar lists all bookmarked pages, allowing for quick navigation by clicking on the page number.
-
-- Jump to Page: Instantly navigate to any specific page by entering its number.
-
-- Persistent Data Storage: Annotations and bookmarks are automatically saved to your browser's local storage, associated with the unique content of each PDF file (via a SHA-256 hash). This ensures your notes persist even if you close and reopen the browser or reload the same PDF.
-
-- High-DPI Rendering: PDF pages and annotations are rendered sharply, adapting to various screen resolutions for a clear viewing experience.
-
-- Responsive Design: The interface adjusts to fit different screen sizes, from desktop to mobile.
-
-- Custom Modals & Status Messages: User-friendly alerts and confirmations, along with subtle status notifications for actions.
-
 # 🚀 How to Use
 1. Open the Application: Simply open the index.html file in any modern web browser.
 
