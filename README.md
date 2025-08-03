@@ -1,7 +1,17 @@
 # ✨ Features
-- PDF Loading: Easily upload and view PDF documents directly in your browser.
+- PDF Loading: Easily upload and view PDF documents directly in your browser using multiple methods:
 
-- Multi-Color Scribbling: Scribble notes on any page using a selection of colors: purple, blue, red, and green.
+  - Click "Choose File" button to select a PDF
+
+  - **Drag & Drop**: Simply drag any PDF file from your computer and drop it onto the viewer area
+
+- Multi-Color Scribbling: 
+
+  - **Pen Tool**: Draw annotations with multi-color support (purple, blue, red, and green)
+
+  - **Eraser Tool**: Selectively erase parts of your annotations with a larger brush size
+
+  - Easy tool switching with visual feedback and appropriate cursors
 
 - Page-Specific Annotations: All scribbles are saved uniquely for each PDF document and each page within that document.
 
@@ -26,40 +36,51 @@
 
 2. Load a PDF:
 
-   - Click the "Choose File" button.
+   - **Method 1**: Click the "Choose File" button and select a PDF document from your local system
+   
+   - **Method 2**: Drag any PDF file from your computer and drop it directly onto the PDF viewer area
 
-   - Select a PDF document from your local system.
-
-   - The PDF will load, and its first page will be displayed.
+   - The PDF will load, and its first page will be displayed
 
 3. Navigate Pages:
 
    - Use the "Previous Page" and "Next Page" buttons to flip through the document.
 
    - Enter a page number in the input field and click "Jump to Page" to go directly to that page.
+  
+   - **Keyboard Shortcuts**: Press left arrow (←) for previous page or right arrow (→) for next page
 
 4. Scribble Notes:
 
-   - Select your desired drawing color from the color palette (purple, blue, red, green). The active color will have an indigo border.
+   - You can Toggle between the Pen and Eraser Tool using the keyboard shortcut "T"
 
-   - Click and drag your mouse (or use your finger on touch devices) over the PDF to draw.
+   - **Pen Tool**:
 
-   - Your scribbles will automatically be saved.
+      - Click the "Pen" button to activate drawing mode
+      - Select your desired drawing color from the color palette (purple, blue, red, green). The active color will have an indigo border
+      - Click and drag your mouse (or use your finger on touch devices) over the PDF to draw
 
-5. Clear Scribbles:
+
+   - Eraser Tool:
+
+      - Click the "Eraser" button to activate erasing mode
+      - The cursor will change to an eraser icon and the color palette will be disabled
+      - Click and drag over any annotations to erase them selectively
+
+6. Clear Scribbles:
 
    - To erase all scribbles on the current page, click the "Clear Scribbles" button. You will be asked for confirmation.
 
-6. Toggle Bookmarks:
+7. Toggle Bookmarks:
 
-   - To bookmark the current page, click the "Toggle Bookmark" button.
+   - To bookmark the current page, click the "Toggle Bookmark" button or press "B".
 
    - The bookmark icon (🔖) will appear/disappear on the top-right of the PDF viewer area.
 
    - The bookmarked page will be added to or removed from the "Bookmarked Pages" list on the right sidebar.
 
-7. Jump via Bookmarks:
+8. Jump via Bookmarks:
 
    - Click on any page number in the "Bookmarked Pages" list to jump directly to that bookmarked page.
 
-8. Data Persistence: Your scribbles and bookmarks are automatically saved. When you reload the same PDF file (even if it has the same name as another PDF but different content), your annotations will reappear.
+9. Data Persistence: Your scribbles and bookmarks are automatically saved. When you reload the same PDF file (even if it has the same name as another PDF but different content), your annotations will reappear.
