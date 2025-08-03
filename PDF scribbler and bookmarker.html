@@ -100,7 +100,46 @@
             flex-grow: 1; /* Allow viewer to take up most space */
             min-width: 400px; /* Ensure it's not too squished on larger screens */
             max-width: calc(100% - 270px); /* Adjust based on sidebar width + gap */
+            transition: background-color 0.3s ease-in-out, border-color 0.3s ease-in-out;
         }
+        
+        /* Drag and drop styles */
+        .pdf-viewer-area.drag-over {
+            background-color: #f0f4ff;
+            border-color: #4f46e5;
+            border-style: dashed;
+            border-width: 2px;
+        }
+        
+        .drop-zone-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #6b7280;
+            font-size: 1.2rem;
+            pointer-events: none;
+            z-index: 5;
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        .drop-zone-message.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        
+        .drop-zone-message.drag-active {
+            opacity: 1;
+            visibility: visible;
+            color: #4f46e5;
+            font-weight: 600;
+        }
+        
         .pdf-canvas {
             display: block;
             width: 100%;
@@ -348,11 +387,17 @@
         <!-- Main content area and sidebar wrapper -->
         <div class="main-content-wrapper">
             <!-- PDF Viewer and Annotation Area -->
-            <div class="pdf-viewer-area relative">
+            <div class="pdf-viewer-area relative" id="pdfViewerArea">
                 <canvas id="pdfCanvas" class="pdf-canvas"></canvas>
                 <canvas id="annotationCanvas" class="annotation-canvas"></canvas>
                 <div id="loadingOverlay" class="loading-overlay hidden">Loading PDF...</div>
                 <span id="bookmarkIcon" class="bookmark-indicator hidden">🔖</span>
+                
+                <!-- Drop zone message -->
+                <div id="dropZoneMessage" class="drop-zone-message">
+                    <div>📄</div>
+                    <div>Drop PDF here or click "Choose File" to get started</div>
+                </div>
             </div>
 
             <!-- Bookmarks Panel -->
@@ -418,6 +463,8 @@
         const noBookmarksMessage = document.getElementById('noBookmarksMessage');
         const penToolBtn = document.getElementById('penTool'); // New: Pen tool button
         const eraserToolBtn = document.getElementById('eraserTool'); // New: Eraser tool button
+        const pdfViewerArea = document.getElementById('pdfViewerArea'); // New: For drag and drop
+        const dropZoneMessage = document.getElementById('dropZoneMessage'); // New: Drop zone message
 
 
         const pdfCtx = pdfCanvas.getContext('2d');
@@ -667,6 +714,9 @@
                 }
 
                 updateBookmarkIcon(num); // Update bookmark icon based on current page
+                
+                // Hide drop zone message once PDF is loaded
+                dropZoneMessage.classList.add('hidden');
             } catch (error) {
                 console.error('Error rendering page:', error);
                 showCustomAlert(`Error rendering page: ${error.message}`);
@@ -784,12 +834,17 @@
         }
 
         /**
-         * Event handler for PDF file selection.
-         * @param {Event} event - The file input change event.
+         * Processes a PDF file for loading.
+         * @param {File} file - The PDF file to load.
          */
-        async function handlePdfFile(event) {
-            const file = event.target.files[0];
+        async function processPdfFile(file) {
             if (!file) {
+                return;
+            }
+
+            // Validate file type
+            if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                await showCustomAlert('Please select a valid PDF file.');
                 return;
             }
 
@@ -830,6 +885,83 @@
                 updateActiveColorButton(currentColor); // Ensure current color button is active on PDF load
             };
             fileReader.readAsArrayBuffer(file); // Read file as ArrayBuffer
+        }
+
+        /**
+         * Event handler for PDF file selection.
+         * @param {Event} event - The file input change event.
+         */
+        async function handlePdfFile(event) {
+            const file = event.target.files[0];
+            await processPdfFile(file);
+        }
+
+        // --- Drag and Drop Functions ---
+
+        /**
+         * Handles drag over event.
+         * @param {DragEvent} e - The drag event.
+         */
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            pdfViewerArea.classList.add('drag-over');
+            dropZoneMessage.classList.remove('hidden');
+            dropZoneMessage.classList.add('drag-active');
+        }
+
+        /**
+         * Handles drag leave event.
+         * @param {DragEvent} e - The drag event.
+         */
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            // Only remove drag styling if we're leaving the viewer area itself, not a child element
+            if (!pdfViewerArea.contains(e.relatedTarget)) {
+                pdfViewerArea.classList.remove('drag-over');
+                if (!pdfDoc) {
+                    dropZoneMessage.classList.remove('hidden');
+                    dropZoneMessage.classList.remove('drag-active');
+                } else {
+                    dropZoneMessage.classList.add('hidden');
+                }
+            }
+        }
+
+        /**
+         * Handles drop event.
+         * @param {DragEvent} e - The drop event.
+         */
+        async function handleDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            pdfViewerArea.classList.remove('drag-over');
+            dropZoneMessage.classList.remove('drag-active');
+
+            const files = Array.from(e.dataTransfer.files);
+            const pdfFiles = files.filter(file => 
+                file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+            );
+
+            if (pdfFiles.length === 0) {
+                await showCustomAlert('Please drop a valid PDF file.');
+                if (!pdfDoc) {
+                    dropZoneMessage.classList.remove('hidden');
+                }
+                return;
+            }
+
+            if (pdfFiles.length > 1) {
+                await showCustomAlert('Please drop only one PDF file at a time.');
+                if (!pdfDoc) {
+                    dropZoneMessage.classList.remove('hidden');
+                }
+                return;
+            }
+
+            // Process the first (and only) PDF file
+            await processPdfFile(pdfFiles[0]);
         }
 
         /**
@@ -1065,6 +1197,11 @@
         penToolBtn.addEventListener('click', () => setActiveTool('pen'));
         eraserToolBtn.addEventListener('click', () => setActiveTool('eraser'));
 
+        // Drag and drop event listeners
+        pdfViewerArea.addEventListener('dragover', handleDragOver);
+        pdfViewerArea.addEventListener('dragleave', handleDragLeave);
+        pdfViewerArea.addEventListener('drop', handleDrop);
+
         // Drawing event listeners
         annotationCanvas.addEventListener('mousedown', startDrawing);
         annotationCanvas.addEventListener('mousemove', draw);
@@ -1089,6 +1226,31 @@
             }
         });
 
+        // Keyboard navigation event listener
+        document.addEventListener('keydown', (event) => {
+            // Only handle arrow keys if a PDF is loaded and we're not in an input field
+            if (!pdfDoc || event.target.tagName === 'INPUT') {
+                return;
+            }
+
+            switch (event.key) {
+                case 'ArrowLeft':
+                    event.preventDefault(); // Prevent default browser behavior
+                    if (currentPageNum > 1) {
+                        onPrevPage();
+                        showStatusMessage(`Previous page: ${currentPageNum}`);
+                    }
+                    break;
+                case 'ArrowRight':
+                    event.preventDefault(); // Prevent default browser behavior
+                    if (currentPageNum < pdfDoc.numPages) {
+                        onNextPage();
+                        showStatusMessage(`Next page: ${currentPageNum}`);
+                    }
+                    break;
+            }
+        });
+
         // Initial state of buttons
         prevPageBtn.disabled = true;
         nextPageBtn.disabled = true;
@@ -1100,6 +1262,25 @@
         updateActiveColorButton(currentColor);
         // Initial update of the bookmarks display
         updateBookmarksDisplay();
+		
+		function handleShortcut(event) {
+			if (event.key === "b") {
+				event.preventDefault();
+				
+				toggleCurrentPageBookmark();
+			}
+			if (event.key === "t"){
+			
+				event.preventDefault();
+				if(activeTool === "pen"){
+					setActiveTool('eraser');
+				}else{
+					setActiveTool('pen');
+				}
+			}
+
+		}
+		document.addEventListener("keydown", handleShortcut);
     </script>
 </body>
 </html>
