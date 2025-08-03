@@ -19,32 +19,33 @@
 
 4. Scribble Notes:
 
-   - You can Toggle between the Pen and Eraser Tool using the keyboard shortcut "T"
-
    - **Pen Tool**:
 
       - Click the "Pen" button to activate drawing mode
       - Select your desired drawing color from the color palette (purple, blue, red, green). The active color will have an indigo border
       - Click and drag your mouse (or use your finger on touch devices) over the PDF to draw
 
-
-   - Eraser Tool:
+   - **Eraser Tool**:
 
       - Click the "Eraser" button to activate erasing mode
       - The cursor will change to an eraser icon and the color palette will be disabled
       - Click and drag over any annotations to erase them selectively
 
+   - **Keyboard Shortcut:** You can Toggle between the Pen and Eraser Tool using the keyboard shortcut "T".
+  
 6. Clear Scribbles:
 
    - To erase all scribbles on the current page, click the "Clear Scribbles" button. You will be asked for confirmation.
 
 7. Toggle Bookmarks:
 
-   - To bookmark the current page, click the "Toggle Bookmark" button or press "B".
+   - To bookmark the current page, click the "Toggle Bookmark" button.
 
    - The bookmark icon (🔖) will appear/disappear on the top-right of the PDF viewer area.
 
    - The bookmarked page will be added to or removed from the "Bookmarked Pages" list on the right sidebar.
+  
+   - **keyboard Shortcut:** You can toggle bookmark using keyboard shortcut "B".
 
 8. Jump via Bookmarks:
 
